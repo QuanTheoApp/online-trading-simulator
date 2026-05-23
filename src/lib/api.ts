@@ -7,10 +7,21 @@ function getPlayerHeaders(): Record<string, string> {
     if (raw) {
       const data = JSON.parse(raw)
       if (data.id) h['X-Player-ID'] = data.id
-      if (data.name) h['X-Player-Name'] = data.name
+      if (data.email) h['X-Player-Name'] = data.email
     }
   } catch {}
   return h
+}
+
+export async function loginPlayer(email: string, pin: string, traderName?: string): Promise<{ id: string; traderName: string; usdBalance: string; isNew?: boolean }> {
+  const res = await fetch('/api/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, pin, traderName }),
+  })
+  const data = await res.json()
+  if (!res.ok) throw new Error(data.error || 'Login failed')
+  return data
 }
 
 export interface BinancePair {

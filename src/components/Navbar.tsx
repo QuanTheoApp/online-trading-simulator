@@ -13,7 +13,7 @@ const NAV_LINKS = [
 
 export default function Navbar() {
   const location = useLocation()
-  const { player, usdBalance, clearPlayer } = useStore()
+  const { player, usdBalance } = useStore()
 
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 bg-dark-900/90 backdrop-blur-lg border-b border-dark-600/40">
@@ -55,12 +55,9 @@ export default function Navbar() {
               </div>
               <div className="flex items-center gap-2">
                 <div className="w-7 h-7 rounded-full bg-gradient-to-br from-brand/80 to-brand-dark/80 flex items-center justify-center text-xs font-bold text-dark-950">
-                  {player.name[0].toUpperCase()}
+                  {player.traderName[0].toUpperCase()}
                 </div>
-                <span className="hidden sm:inline text-sm text-slate-300 font-medium">{player.name}</span>
-                <button onClick={clearPlayer} className="text-xs text-slate-500 hover:text-slate-300 transition-colors">
-                  Reset
-                </button>
+                <span className="hidden sm:inline text-sm text-slate-300 font-medium truncate max-w-[160px]">{player.traderName}</span>
               </div>
             </>
           )}

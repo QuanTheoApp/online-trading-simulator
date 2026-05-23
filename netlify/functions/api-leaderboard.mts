@@ -56,8 +56,7 @@ export default async (req: Request) => {
     const tradeCount = tradeCounts.find(t => t.userId === u.id)
 
     return {
-      username: u.username,
-      fullName: u.fullName,
+      traderName: u.fullName || u.username,
       portfolioValue,
       pnl,
       pnlPercent,

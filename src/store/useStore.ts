@@ -1,10 +1,12 @@
 import { create } from 'zustand'
+import { loginPlayer } from '../lib/api'
 
 const STORAGE_KEY = 'ots_player'
 
 export interface PlayerInfo {
   id: string
-  name: string
+  email: string
+  traderName: string
 }
 
 export interface Holding {
@@ -38,8 +40,7 @@ export interface PortfolioStats {
 }
 
 export interface LeaderboardEntry {
-  username: string
-  fullName: string
+  traderName: string
   portfolioValue: number
   pnl: number
   pnlPercent: number
@@ -75,8 +76,10 @@ interface Store {
   showPinModal: boolean
   setShowPinModal: (show: boolean) => void
   initPlayer: () => void
-  setPlayer: (name: string, pin: string) => void
-  verifyPin: (pin: string) => boolean
+  setPlayer: (email: string, pin: string, traderName?: string) => Promise<void>
+  verifyPin: (pin: string) => Promise<boolean>
+  loginError: string | null
+  setLoginError: (err: string | null) => void
   clearPlayer: () => void
 
   showSplash: boolean
@@ -112,12 +115,12 @@ interface Store {
   removeToast: (id: string) => void
 }
 
-function loadStoredPlayer(): { id: string; name: string; pin: string } | null {
+function loadStoredPlayer(): { id: string; email: string; traderName: string } | null {
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
     if (!raw) return null
     const data = JSON.parse(raw)
-    if (data.id && data.name && data.pin) return { id: data.id, name: data.name, pin: data.pin }
+    if (data.id && data.email) return { id: data.id, email: data.email, traderName: data.traderName || '' }
     return null
   } catch {
     return null
@@ -131,6 +134,8 @@ export const useStore = create<Store>((set, get) => ({
   setShowNameModal: (show) => set({ showNameModal: show }),
   showPinModal: false,
   setShowPinModal: (show) => set({ showPinModal: show }),
+  loginError: null,
+  setLoginError: (err) => set({ loginError: err }),
 
   initPlayer: () => {
     const stored = loadStoredPlayer()
@@ -142,34 +147,46 @@ export const useStore = create<Store>((set, get) => ({
     }
   },
 
-  setPlayer: (name, pin) => {
-    const player: PlayerInfo = {
-      id: crypto.randomUUID(),
-      name,
+  setPlayer: async (email, pin, traderName) => {
+    set({ loginError: null })
+    try {
+      const data = await loginPlayer(email, pin, traderName)
+      const player: PlayerInfo = { id: data.id, email, traderName: data.traderName }
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(player))
+      set({ player, isReady: true, showNameModal: false, showSplash: true })
+      if (data.isNew) {
+        get().addToast('success', `Welcome! You start with $100,000 virtual funds.`)
+      } else {
+        get().addToast('success', `Welcome back, ${data.traderName}!`)
+      }
+    } catch (err: any) {
+      set({ loginError: err.message || 'Login failed' })
     }
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...player, pin }))
-    set({ player, isReady: true, showNameModal: false, showSplash: true })
-    get().addToast('success', `Welcome, ${name}! You start with $100,000 virtual funds.`)
   },
 
-  verifyPin: (pin) => {
+  verifyPin: async (pin) => {
+    set({ loginError: null })
     const stored = loadStoredPlayer()
     if (!stored) return false
-    if (stored.pin === pin) {
+    try {
+      const data = await loginPlayer(stored.email, pin)
+      const player: PlayerInfo = { id: data.id, email: stored.email, traderName: data.traderName }
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(player))
       set({
-        player: { id: stored.id, name: stored.name },
+        player,
         isReady: true,
         showPinModal: false,
         showSplash: true,
       })
       return true
+    } catch {
+      return false
     }
-    return false
   },
 
   clearPlayer: () => {
     localStorage.removeItem(STORAGE_KEY)
-    set({ player: null, isReady: false, holdings: [], usdBalance: 100000, showNameModal: true, showPinModal: false })
+    set({ player: null, isReady: false, holdings: [], usdBalance: 100000, showNameModal: true, showPinModal: false, loginError: null })
   },
 
   showSplash: false,

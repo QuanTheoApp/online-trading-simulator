@@ -2,8 +2,9 @@ import { useState, useRef } from 'react'
 import { useStore } from '../store/useStore'
 
 export default function PlayerNameModal() {
-  const { showNameModal, setPlayer } = useStore()
-  const [name, setName] = useState('')
+  const { showNameModal, setPlayer, loginError } = useStore()
+  const [traderName, setTraderName] = useState('')
+  const [email, setEmail] = useState('')
   const [pin, setPin] = useState(['', '', '', ''])
   const [loading, setLoading] = useState(false)
   const pinRefs = useRef<(HTMLInputElement | null)[]>([])
@@ -32,11 +33,11 @@ export default function PlayerNameModal() {
     }
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!name.trim() || !pinComplete) return
+    if (!email.trim() || !traderName.trim() || !pinComplete) return
     setLoading(true)
-    setPlayer(name.trim(), pinValue)
+    await setPlayer(email.trim(), pinValue, traderName.trim())
     setLoading(false)
   }
 
@@ -52,22 +53,33 @@ export default function PlayerNameModal() {
           </div>
           <h2 className="font-display text-xl font-bold">Welcome to OTS</h2>
           <p className="text-sm text-slate-500 mt-1">
-            Enter your name and set a PIN to start trading with $100,000 in virtual funds
+            Enter your details and set a PIN to start trading with $100,000 in virtual funds
           </p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-xs text-slate-500 mb-1.5 font-medium">Your Name</label>
+            <label className="block text-xs text-slate-500 mb-1.5 font-medium">Trader Name</label>
             <input
               type="text"
-              value={name}
-              onChange={e => setName(e.target.value)}
+              value={traderName}
+              onChange={e => setTraderName(e.target.value)}
               className="input-field"
-              placeholder="Enter your trader name"
-              maxLength={40}
-              minLength={1}
+              placeholder="Your public trader name"
               autoFocus
+              required
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs text-slate-500 mb-1.5 font-medium">Email Address</label>
+            <p className="text-xs text-slate-600 mb-1.5">Private — used only for login, never shown publicly</p>
+            <input
+              type="email"
+              value={email}
+              onChange={e => setEmail(e.target.value)}
+              className="input-field"
+              placeholder="you@example.com"
               required
             />
           </div>
@@ -92,17 +104,23 @@ export default function PlayerNameModal() {
             </div>
           </div>
 
+          {loginError && (
+            <p className="text-center text-sm text-loss animate-fadeIn">
+              {loginError}
+            </p>
+          )}
+
           <button
             type="submit"
-            disabled={loading || !name.trim() || !pinComplete}
+            disabled={loading || !email.trim() || !traderName.trim() || !pinComplete}
             className="btn-primary w-full py-3"
           >
-            {loading ? 'Setting up...' : 'Start Trading'}
+            {loading ? 'Signing in...' : 'Start Trading'}
           </button>
         </form>
 
         <p className="mt-4 text-center text-xs text-slate-600">
-          Your progress is saved automatically. Use the same browser and PIN to come back.
+          Use the same email and PIN from any device to access your account. Your email stays private.
         </p>
       </div>
     </div>
