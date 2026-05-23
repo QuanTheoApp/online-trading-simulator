@@ -40,6 +40,7 @@ export interface PortfolioStats {
 }
 
 export interface LeaderboardEntry {
+  userId: string
   traderName: string
   portfolioValue: number
   pnl: number
@@ -78,6 +79,7 @@ interface Store {
   initPlayer: () => void
   setPlayer: (email: string, pin: string, traderName?: string) => Promise<void>
   verifyPin: (pin: string) => Promise<boolean>
+  requireAuth: () => boolean
   loginError: string | null
   setLoginError: (err: string | null) => void
   clearPlayer: () => void
@@ -138,6 +140,11 @@ export const useStore = create<Store>((set, get) => ({
   setLoginError: (err) => set({ loginError: err }),
 
   initPlayer: () => {
+    // Silent init — don't show modals, just mark state
+  },
+
+  requireAuth: () => {
+    if (get().isReady) return true
     const stored = loadStoredPlayer()
     if (stored) {
       set({ showPinModal: true })
@@ -145,6 +152,7 @@ export const useStore = create<Store>((set, get) => ({
       localStorage.removeItem(STORAGE_KEY)
       set({ showNameModal: true })
     }
+    return false
   },
 
   setPlayer: async (email, pin, traderName) => {
@@ -153,7 +161,7 @@ export const useStore = create<Store>((set, get) => ({
       const data = await loginPlayer(email, pin, traderName)
       const player: PlayerInfo = { id: data.id, email, traderName: data.traderName }
       localStorage.setItem(STORAGE_KEY, JSON.stringify(player))
-      set({ player, isReady: true, showNameModal: false, showSplash: true })
+      set({ player, isReady: true, showNameModal: false })
       if (data.isNew) {
         get().addToast('success', `Welcome! You start with $100,000 virtual funds.`)
       } else {
@@ -176,7 +184,6 @@ export const useStore = create<Store>((set, get) => ({
         player,
         isReady: true,
         showPinModal: false,
-        showSplash: true,
       })
       return true
     } catch {
@@ -186,10 +193,10 @@ export const useStore = create<Store>((set, get) => ({
 
   clearPlayer: () => {
     localStorage.removeItem(STORAGE_KEY)
-    set({ player: null, isReady: false, holdings: [], usdBalance: 100000, showNameModal: true, showPinModal: false, loginError: null })
+    set({ player: null, isReady: false, holdings: [], usdBalance: 100000, showNameModal: false, showPinModal: false, loginError: null, showSplash: true })
   },
 
-  showSplash: false,
+  showSplash: true,
   setShowSplash: (show) => set({ showSplash: show }),
 
   marketType: 'crypto',

@@ -1,5 +1,4 @@
 import { Routes, Route } from 'react-router-dom'
-import { useEffect } from 'react'
 import Layout from './components/Layout'
 import TradingView from './components/TradingView'
 import MarketSplash from './components/MarketSplash'
@@ -11,6 +10,8 @@ import WalletManager from './components/WalletManager'
 import PlayerNameModal from './components/PlayerNameModal'
 import PinModal from './components/PinModal'
 import Toast from './components/Toast'
+import AuthGuard from './components/AuthGuard'
+import PublicProfile from './components/PublicProfile'
 import { useStore } from './store/useStore'
 
 function HomePage() {
@@ -19,22 +20,17 @@ function HomePage() {
 }
 
 export default function App() {
-  const { initPlayer } = useStore()
-
-  useEffect(() => {
-    initPlayer()
-  }, [initPlayer])
-
   return (
     <>
       <Layout>
         <Routes>
           <Route path="/" element={<HomePage />} />
-          <Route path="/portfolio" element={<Portfolio />} />
+          <Route path="/portfolio" element={<AuthGuard><Portfolio /></AuthGuard>} />
           <Route path="/leaderboard" element={<Leaderboard />} />
-          <Route path="/history" element={<TradeHistory />} />
-          <Route path="/analytics" element={<Analytics />} />
-          <Route path="/wallets" element={<WalletManager />} />
+          <Route path="/trader/:userId" element={<PublicProfile />} />
+          <Route path="/history" element={<AuthGuard><TradeHistory /></AuthGuard>} />
+          <Route path="/analytics" element={<AuthGuard><Analytics /></AuthGuard>} />
+          <Route path="/wallets" element={<AuthGuard><WalletManager /></AuthGuard>} />
         </Routes>
       </Layout>
       <PlayerNameModal />
