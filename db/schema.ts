@@ -5,10 +5,13 @@ export const users = pgTable('users', {
   email: text('email'),
   username: text('username').notNull(),
   fullName: text('full_name'),
+  pin: text('pin'),
   usdBalance: decimal('usd_balance', { precision: 20, scale: 8 }).notNull().default('100000'),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
-})
+}, (t) => [
+  uniqueIndex('users_email_unique_idx').on(t.email),
+])
 
 export const trades = pgTable('trades', {
   id: serial('id').primaryKey(),

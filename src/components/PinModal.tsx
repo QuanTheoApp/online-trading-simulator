@@ -1,12 +1,26 @@
 import { useState, useRef, useEffect } from 'react'
 import { useStore } from '../store/useStore'
 
+const STORAGE_KEY = 'ots_player'
+
+function getStoredTraderName(): string | null {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY)
+    if (!raw) return null
+    const data = JSON.parse(raw)
+    return data.traderName || null
+  } catch {
+    return null
+  }
+}
+
 export default function PinModal() {
   const { showPinModal, verifyPin, clearPlayer } = useStore()
   const [pin, setPin] = useState(['', '', '', ''])
   const [error, setError] = useState(false)
   const [shake, setShake] = useState(false)
   const pinRefs = useRef<(HTMLInputElement | null)[]>([])
+  const storedTraderName = getStoredTraderName()
 
   useEffect(() => {
     if (showPinModal) {
@@ -16,7 +30,7 @@ export default function PinModal() {
 
   if (!showPinModal) return null
 
-  const handlePinChange = (index: number, value: string) => {
+  const handlePinChange = async (index: number, value: string) => {
     if (value.length > 1) value = value.slice(-1)
     if (value && !/^\d$/.test(value)) return
 
@@ -32,7 +46,7 @@ export default function PinModal() {
     if (value && index === 3) {
       const fullPin = next.join('')
       if (fullPin.length === 4) {
-        const ok = verifyPin(fullPin)
+        const ok = await verifyPin(fullPin)
         if (!ok) {
           setError(true)
           setShake(true)
@@ -64,6 +78,9 @@ export default function PinModal() {
             </svg>
           </div>
           <h2 className="font-display text-xl font-bold">Welcome Back</h2>
+          {storedTraderName && (
+            <p className="text-sm text-slate-400 mt-1 truncate max-w-[280px] mx-auto">{storedTraderName}</p>
+          )}
           <p className="text-sm text-slate-500 mt-1">Enter your 4-digit PIN to continue</p>
         </div>
 
@@ -98,7 +115,7 @@ export default function PinModal() {
             onClick={clearPlayer}
             className="text-xs text-slate-600 hover:text-slate-400 transition-colors"
           >
-            Not you? Start fresh
+            Use a different account
           </button>
         </div>
       </div>

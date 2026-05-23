@@ -25,7 +25,7 @@ export default function MarketSplash() {
             </svg>
           </div>
           <h1 className="font-display text-3xl sm:text-4xl font-bold mb-2">
-            Welcome{player ? `, ${player.name}` : ''}
+            Welcome{player ? `, ${player.traderName}` : ''}
           </h1>
           <p className="text-slate-500 text-sm sm:text-base">Choose a market to start trading on OTS</p>
         </div>

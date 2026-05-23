@@ -76,17 +76,14 @@ export default function Leaderboard() {
               </thead>
               <tbody>
                 {sorted.map((entry, idx) => (
-                  <tr key={entry.username} className="border-b border-dark-600/20 hover:bg-dark-700/30 transition-colors">
+                  <tr key={entry.traderName} className="border-b border-dark-600/20 hover:bg-dark-700/30 transition-colors">
                     <td className="px-4 py-3">{getRankBadge(idx)}</td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2.5">
                         <div className="w-7 h-7 rounded-full bg-gradient-to-br from-brand/60 to-brand-dark/60 flex items-center justify-center text-xs font-bold text-dark-950">
-                          {(entry.fullName?.[0] || entry.username[0]).toUpperCase()}
+                          {entry.traderName[0].toUpperCase()}
                         </div>
-                        <div>
-                          <div className="text-sm font-medium">{entry.fullName || entry.username}</div>
-                          <div className="text-xs text-slate-500">@{entry.username}</div>
-                        </div>
+                        <div className="text-sm font-medium">{entry.traderName}</div>
                       </div>
                     </td>
                     <td className="px-4 py-3 text-right font-mono text-sm">{formatUSD(entry.portfolioValue)}</td>
