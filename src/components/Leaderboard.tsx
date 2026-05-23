@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { getLeaderboard } from '../lib/api'
 import { formatUSD, formatPercent } from '../lib/format'
 import { useStore, LeaderboardEntry } from '../store/useStore'
@@ -76,15 +77,15 @@ export default function Leaderboard() {
               </thead>
               <tbody>
                 {sorted.map((entry, idx) => (
-                  <tr key={entry.traderName} className="border-b border-dark-600/20 hover:bg-dark-700/30 transition-colors">
+                  <tr key={entry.userId} className="border-b border-dark-600/20 hover:bg-dark-700/30 transition-colors">
                     <td className="px-4 py-3">{getRankBadge(idx)}</td>
                     <td className="px-4 py-3">
-                      <div className="flex items-center gap-2.5">
+                      <Link to={`/trader/${entry.userId}`} className="flex items-center gap-2.5 group">
                         <div className="w-7 h-7 rounded-full bg-gradient-to-br from-brand/60 to-brand-dark/60 flex items-center justify-center text-xs font-bold text-dark-950">
                           {entry.traderName[0].toUpperCase()}
                         </div>
-                        <div className="text-sm font-medium">{entry.traderName}</div>
-                      </div>
+                        <div className="text-sm font-medium group-hover:text-brand transition-colors">{entry.traderName}</div>
+                      </Link>
                     </td>
                     <td className="px-4 py-3 text-right font-mono text-sm">{formatUSD(entry.portfolioValue)}</td>
                     <td className="px-4 py-3 text-right">

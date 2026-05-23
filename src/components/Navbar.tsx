@@ -13,7 +13,7 @@ const NAV_LINKS = [
 
 export default function Navbar() {
   const location = useLocation()
-  const { player, usdBalance } = useStore()
+  const { player, usdBalance, requireAuth, clearPlayer } = useStore()
 
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 bg-dark-900/90 backdrop-blur-lg border-b border-dark-600/40">
@@ -47,7 +47,7 @@ export default function Navbar() {
         </div>
 
         <div className="flex items-center gap-4">
-          {player && (
+          {player ? (
             <>
               <div className="hidden sm:flex items-center gap-3 px-3 py-1.5 rounded-lg bg-dark-800/80 border border-dark-600/30">
                 <span className="text-xs text-slate-500">Balance</span>
@@ -59,7 +59,20 @@ export default function Navbar() {
                 </div>
                 <span className="hidden sm:inline text-sm text-slate-300 font-medium truncate max-w-[160px]">{player.traderName}</span>
               </div>
+              <button
+                onClick={clearPlayer}
+                className="text-xs text-slate-500 hover:text-slate-300 transition-colors px-2 py-1 rounded hover:bg-dark-700/50"
+              >
+                Sign out
+              </button>
             </>
+          ) : (
+            <button
+              onClick={() => requireAuth()}
+              className="btn-primary text-sm px-4 py-1.5"
+            >
+              Sign In
+            </button>
           )}
         </div>
       </div>

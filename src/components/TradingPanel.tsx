@@ -6,7 +6,7 @@ import { formatUSD, formatPrice, formatCrypto } from '../lib/format'
 export default function TradingPanel() {
   const {
     currentSymbol, currentBase, currentPrice, isReady, usdBalance, marketType,
-    holdings, setUsdBalance, setHoldings, addToast, setShowNameModal,
+    holdings, setUsdBalance, setHoldings, addToast, requireAuth,
   } = useStore()
 
   const [side, setSide] = useState<'buy' | 'sell'>('buy')
@@ -24,7 +24,7 @@ export default function TradingPanel() {
   useEffect(() => { setUsdAmount('') }, [currentSymbol, side])
 
   const handleTrade = async () => {
-    if (!isReady) { setShowNameModal(true); return }
+    if (!isReady) { requireAuth(); return }
     if (usdValue <= 0 || currentPrice <= 0 || quantity <= 0) return
 
     setLoading(true)

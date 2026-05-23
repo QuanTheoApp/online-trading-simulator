@@ -99,6 +99,12 @@ export async function getLeaderboard() {
   return res.json()
 }
 
+export async function getPublicPortfolio(userId: string) {
+  const res = await fetch(`/api/public-portfolio?userId=${encodeURIComponent(userId)}`)
+  if (!res.ok) throw new Error('Failed to fetch portfolio')
+  return res.json()
+}
+
 export async function getWallets() {
   const res = await fetch('/api/wallets', { headers: getPlayerHeaders() })
   if (!res.ok) throw new Error('Failed to fetch wallets')

@@ -1,7 +1,7 @@
 import { useStore } from '../store/useStore'
 
 export default function MarketSplash() {
-  const { setCurrentSymbol, setMarketType, setShowSplash, player } = useStore()
+  const { setCurrentSymbol, setMarketType, setShowSplash } = useStore()
 
   const handleCrypto = () => {
     setMarketType('crypto')
@@ -25,9 +25,9 @@ export default function MarketSplash() {
             </svg>
           </div>
           <h1 className="font-display text-3xl sm:text-4xl font-bold mb-2">
-            Welcome{player ? `, ${player.traderName}` : ''}
+            Online Trading Simulator
           </h1>
-          <p className="text-slate-500 text-sm sm:text-base">Choose a market to start trading on OTS</p>
+          <p className="text-slate-500 text-sm sm:text-base">Choose a market to explore</p>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
