@@ -1,7 +1,4 @@
-# robots.txt — QuanTheo Arena
-
 User-agent: *
 Allow: /
-Disallow: /api/
 
 Sitemap: https://online-trading-simulator.netlify.app/map.xml
