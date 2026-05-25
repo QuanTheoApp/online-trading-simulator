@@ -39,14 +39,22 @@ export interface PortfolioStats {
   worstTrade: number
 }
 
+export interface LeaderboardHolding {
+  symbol: string
+  quantity: string
+  avgEntryPrice: string
+}
+
 export interface LeaderboardEntry {
   userId: string
   traderName: string
   portfolioValue: number
+  usdBalance: number
   pnl: number
   pnlPercent: number
   totalTrades: number
   holdingsCount: number
+  holdings: LeaderboardHolding[]
   joinedAt: string
 }
 
@@ -111,6 +119,9 @@ interface Store {
 
   wallets: Wallet[]
   setWallets: (w: Wallet[]) => void
+
+  pendingTradeSide: 'buy' | 'sell' | null
+  setPendingTradeSide: (side: 'buy' | 'sell' | null) => void
 
   toasts: ToastMessage[]
   addToast: (type: ToastMessage['type'], message: string) => void
@@ -227,6 +238,9 @@ export const useStore = create<Store>((set, get) => ({
 
   wallets: [],
   setWallets: (w) => set({ wallets: w }),
+
+  pendingTradeSide: null,
+  setPendingTradeSide: (side) => set({ pendingTradeSide: side }),
 
   toasts: [],
   addToast: (type, message) => {

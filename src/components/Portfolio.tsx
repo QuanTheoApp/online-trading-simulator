@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useStore } from '../store/useStore'
 import { getPortfolio, fetchStockQuote } from '../lib/api'
 import { formatUSD, formatPercent, formatCrypto, formatPrice, symbolToName, getBaseFromSymbol, isCryptoSymbol } from '../lib/format'
@@ -8,32 +9,41 @@ const COLORS = ['#f0b429', '#10b981', '#3b82f6', '#8b5cf6', '#ef4444', '#f97316'
 const PRICE_REFRESH_MS = 15_000
 
 export default function Portfolio() {
-  const { isReady, holdings, usdBalance, portfolioStats, setUsdBalance, setHoldings, setPortfolioStats } = useStore()
+  const { isReady, holdings, usdBalance, portfolioStats, setUsdBalance, setHoldings, setPortfolioStats, setCurrentSymbol, setMarketType, setShowSplash, setPendingTradeSide } = useStore()
+  const navigate = useNavigate()
   const [prices, setPrices] = useState<Record<string, number>>({})
   const [loading, setLoading] = useState(true)
   const symbolsRef = useRef<string[]>([])
 
+  const handleQuickSell = (symbol: string) => {
+    const base = getBaseFromSymbol(symbol)
+    const isCrypto = isCryptoSymbol(symbol)
+    setMarketType(isCrypto ? 'crypto' : 'stock')
+    setCurrentSymbol(symbol, base, isCrypto ? 'USDT' : 'USD')
+    setShowSplash(false)
+    setPendingTradeSide('sell')
+    navigate('/')
+  }
+
   const refreshPrices = useCallback(async (symbols: string[]) => {
     if (symbols.length === 0) return
     const priceMap: Record<string, number> = {}
-    await Promise.all(symbols.map(async (s) => {
+    const stockSymbols = symbols.filter(s => !isCryptoSymbol(s))
+    await Promise.all(stockSymbols.map(async (s) => {
       try {
-        if (isCryptoSymbol(s)) {
-          const res = await fetch(`https://api.binance.com/api/v3/ticker/price?symbol=${s}`)
-          const d = await res.json()
-          priceMap[s] = parseFloat(d.price)
-        } else {
-          const d = await fetchStockQuote(s)
-          priceMap[s] = parseFloat(d.price)
-        }
+        const d = await fetchStockQuote(s)
+        priceMap[s] = parseFloat(d.price)
       } catch {}
     }))
-    setPrices(priceMap)
+    if (stockSymbols.length > 0) {
+      setPrices(prev => ({ ...prev, ...priceMap }))
+    }
   }, [])
 
   useEffect(() => {
     if (!isReady) { setLoading(false); return }
     let interval: ReturnType<typeof setInterval>
+    const wsRefs: WebSocket[] = []
     const load = async () => {
       try {
         const data = await getPortfolio()
@@ -43,15 +53,38 @@ export default function Portfolio() {
 
         const symbols = data.holdings.map((h: any) => h.symbol)
         symbolsRef.current = symbols
-        await refreshPrices(symbols)
 
-        interval = setInterval(() => refreshPrices(symbolsRef.current), PRICE_REFRESH_MS)
+        const cryptoSymbols = symbols.filter((s: string) => isCryptoSymbol(s))
+        const stockSymbols = symbols.filter((s: string) => !isCryptoSymbol(s))
+
+        if (cryptoSymbols.length > 0) {
+          const streams = cryptoSymbols.map((s: string) => `${s.toLowerCase()}@ticker`).join('/')
+          const ws = new WebSocket(`wss://stream.binance.com:9443/stream?streams=${streams}`)
+          wsRefs.push(ws)
+          ws.onmessage = (e) => {
+            try {
+              const msg = JSON.parse(e.data)
+              const d = msg.data
+              if (d && d.s && d.c) {
+                setPrices(prev => ({ ...prev, [d.s]: parseFloat(d.c) }))
+              }
+            } catch {}
+          }
+        }
+
+        if (stockSymbols.length > 0) {
+          await refreshPrices(symbols)
+          interval = setInterval(() => refreshPrices(symbolsRef.current), PRICE_REFRESH_MS)
+        }
       } catch (err) {
         console.error(err)
       } finally { setLoading(false) }
     }
     load()
-    return () => { if (interval) clearInterval(interval) }
+    return () => {
+      if (interval) clearInterval(interval)
+      wsRefs.forEach(ws => ws.close())
+    }
   }, [isReady, refreshPrices])
 
   if (loading) {
@@ -197,6 +230,12 @@ export default function Portfolio() {
                         </span>
                       </div>
                     </div>
+                    <button
+                      onClick={() => handleQuickSell(h.symbol)}
+                      className="shrink-0 px-3 py-1.5 rounded-lg bg-loss/10 text-loss text-xs font-semibold hover:bg-loss/20 transition-colors"
+                    >
+                      Sell
+                    </button>
                   </div>
                 )
               })}
