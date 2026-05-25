@@ -1,10 +1,11 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { useParams, Link } from 'react-router-dom'
-import { getPublicPortfolio } from '../lib/api'
-import { formatUSD, formatPercent, formatCrypto, formatPrice, getBaseFromSymbol, timeAgo } from '../lib/format'
+import { getPublicPortfolio, fetchStockQuote } from '../lib/api'
+import { formatUSD, formatPercent, formatCrypto, formatPrice, getBaseFromSymbol, isCryptoSymbol, timeAgo } from '../lib/format'
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts'
 
 const COLORS = ['#f0b429', '#10b981', '#3b82f6', '#8b5cf6', '#ef4444', '#f97316', '#06b6d4', '#ec4899', '#84cc16', '#6366f1']
+const PRICE_REFRESH_MS = 15_000
 
 interface PublicHolding {
   symbol: string
@@ -47,15 +48,42 @@ interface ProfileData {
 export default function PublicProfile() {
   const { userId } = useParams<{ userId: string }>()
   const [data, setData] = useState<ProfileData | null>(null)
+  const [livePrices, setLivePrices] = useState<Record<string, number>>({})
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const symbolsRef = useRef<string[]>([])
+
+  const refreshPrices = useCallback(async (symbols: string[]) => {
+    if (symbols.length === 0) return
+    const priceMap: Record<string, number> = {}
+    await Promise.all(symbols.map(async (s) => {
+      try {
+        if (isCryptoSymbol(s)) {
+          const res = await fetch(`https://api.binance.com/api/v3/ticker/price?symbol=${s}`)
+          const d = await res.json()
+          priceMap[s] = parseFloat(d.price)
+        } else {
+          const d = await fetchStockQuote(s)
+          priceMap[s] = parseFloat(d.price)
+        }
+      } catch {}
+    }))
+    setLivePrices(priceMap)
+  }, [])
 
   useEffect(() => {
     if (!userId) return
+    let interval: ReturnType<typeof setInterval>
     const load = async () => {
       try {
         const result = await getPublicPortfolio(userId)
         setData(result)
+
+        const symbols = result.holdings.map((h: PublicHolding) => h.symbol)
+        symbolsRef.current = symbols
+        await refreshPrices(symbols)
+
+        interval = setInterval(() => refreshPrices(symbolsRef.current), PRICE_REFRESH_MS)
       } catch {
         setError('Trader not found')
       } finally {
@@ -63,7 +91,8 @@ export default function PublicProfile() {
       }
     }
     load()
-  }, [userId])
+    return () => { if (interval) clearInterval(interval) }
+  }, [userId, refreshPrices])
 
   if (loading) {
     return (
@@ -86,16 +115,17 @@ export default function PublicProfile() {
   }
 
   const { user, holdings, stats, recentTrades } = data
-  const totalPnl = user.portfolioValue - 100000
+  const getPrice = (h: PublicHolding) => livePrices[h.symbol] ?? h.currentPrice
+  const holdingsValue = holdings.reduce((sum, h) => sum + parseFloat(h.quantity) * getPrice(h), 0)
+  const portfolioValue = user.usdBalance + holdingsValue
+  const totalPnl = portfolioValue - 100000
   const totalPnlPct = (totalPnl / 100000) * 100
-
-  const holdingsValue = holdings.reduce((sum, h) => sum + parseFloat(h.quantity) * h.currentPrice, 0)
 
   const pieData = [
     { name: 'USD Cash', value: user.usdBalance },
     ...holdings.map(h => ({
       name: getBaseFromSymbol(h.symbol),
-      value: parseFloat(h.quantity) * h.currentPrice,
+      value: parseFloat(h.quantity) * getPrice(h),
     })),
   ].filter(d => d.value > 0)
 
@@ -122,7 +152,7 @@ export default function PublicProfile() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
         <div className="card-glow p-4 animate-pulse-glow">
           <div className="stat-label">Portfolio Value</div>
-          <div className="stat-value mt-1">{formatUSD(user.portfolioValue)}</div>
+          <div className="stat-value mt-1">{formatUSD(portfolioValue)}</div>
         </div>
         <div className="card p-4">
           <div className="stat-label">Total P&L</div>
@@ -193,7 +223,7 @@ export default function PublicProfile() {
                   <div key={d.name} className="flex items-center gap-2 text-xs">
                     <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: COLORS[i % COLORS.length] }} />
                     <span className="text-slate-400">{d.name}</span>
-                    <span className="ml-auto font-mono">{((d.value / user.portfolioValue) * 100).toFixed(1)}%</span>
+                    <span className="ml-auto font-mono">{((d.value / portfolioValue) * 100).toFixed(1)}%</span>
                   </div>
                 ))}
               </div>
@@ -211,9 +241,10 @@ export default function PublicProfile() {
             <div className="space-y-2">
               {holdings.map(h => {
                 const qty = parseFloat(h.quantity)
-                const value = qty * h.currentPrice
-                const pnl = (h.currentPrice - parseFloat(h.avgEntryPrice)) * qty
-                const pnlPct = ((h.currentPrice - parseFloat(h.avgEntryPrice)) / parseFloat(h.avgEntryPrice)) * 100
+                const price = getPrice(h)
+                const value = qty * price
+                const pnl = (price - parseFloat(h.avgEntryPrice)) * qty
+                const pnlPct = ((price - parseFloat(h.avgEntryPrice)) / parseFloat(h.avgEntryPrice)) * 100
                 return (
                   <div key={h.symbol} className="flex items-center gap-3 p-2.5 rounded-lg bg-dark-700/30">
                     <div className="w-8 h-8 rounded-full bg-dark-600 flex items-center justify-center text-xs font-bold font-mono">

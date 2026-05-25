@@ -1,23 +1,34 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { Link } from 'react-router-dom'
 import { getLeaderboard } from '../lib/api'
 import { formatUSD, formatPercent } from '../lib/format'
 import { useStore, LeaderboardEntry } from '../store/useStore'
+
+const PRICE_REFRESH_MS = 15_000
 
 export default function Leaderboard() {
   const { leaderboard, setLeaderboard } = useStore()
   const [loading, setLoading] = useState(true)
   const [sortBy, setSortBy] = useState<'value' | 'pnl' | 'trades'>('value')
 
+  const refreshLeaderboard = useCallback(async () => {
+    try {
+      const data = await getLeaderboard()
+      setLeaderboard(data.leaderboard)
+    } catch {}
+  }, [setLeaderboard])
+
   useEffect(() => {
+    let interval: ReturnType<typeof setInterval>
     const load = async () => {
       try {
-        const data = await getLeaderboard()
-        setLeaderboard(data.leaderboard)
-      } catch {} finally { setLoading(false) }
+        await refreshLeaderboard()
+      } finally { setLoading(false) }
     }
     load()
-  }, [])
+    interval = setInterval(refreshLeaderboard, PRICE_REFRESH_MS)
+    return () => clearInterval(interval)
+  }, [refreshLeaderboard])
 
   const sorted = [...leaderboard].sort((a, b) => {
     if (sortBy === 'value') return b.portfolioValue - a.portfolioValue
@@ -35,7 +46,15 @@ export default function Leaderboard() {
   return (
     <div className="p-4 max-w-5xl mx-auto animate-fadeIn">
       <div className="flex items-center justify-between mb-6">
-        <h1 className="font-display text-2xl font-bold">Leaderboard</h1>
+        <div className="flex items-center gap-2.5">
+          <h1 className="font-display text-2xl font-bold">Leaderboard</h1>
+          {!loading && sorted.length > 0 && (
+            <span className="flex items-center gap-1.5 text-[10px] text-emerald-400 bg-emerald-400/10 px-2 py-0.5 rounded-full">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              LIVE
+            </span>
+          )}
+        </div>
         <div className="flex gap-1 bg-dark-800 rounded-lg p-1 border border-dark-600/30">
           {([['value', 'Value'], ['pnl', 'P&L %'], ['trades', 'Trades']] as const).map(([key, label]) => (
             <button
