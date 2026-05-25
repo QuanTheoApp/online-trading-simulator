@@ -56,34 +56,52 @@ export default function PublicProfile() {
   const refreshPrices = useCallback(async (symbols: string[]) => {
     if (symbols.length === 0) return
     const priceMap: Record<string, number> = {}
-    await Promise.all(symbols.map(async (s) => {
+    const stockSymbols = symbols.filter(s => !isCryptoSymbol(s))
+    await Promise.all(stockSymbols.map(async (s) => {
       try {
-        if (isCryptoSymbol(s)) {
-          const res = await fetch(`https://api.binance.com/api/v3/ticker/price?symbol=${s}`)
-          const d = await res.json()
-          priceMap[s] = parseFloat(d.price)
-        } else {
-          const d = await fetchStockQuote(s)
-          priceMap[s] = parseFloat(d.price)
-        }
+        const d = await fetchStockQuote(s)
+        priceMap[s] = parseFloat(d.price)
       } catch {}
     }))
-    setLivePrices(priceMap)
+    if (stockSymbols.length > 0) {
+      setLivePrices(prev => ({ ...prev, ...priceMap }))
+    }
   }, [])
 
   useEffect(() => {
     if (!userId) return
     let interval: ReturnType<typeof setInterval>
+    const wsRefs: WebSocket[] = []
     const load = async () => {
       try {
         const result = await getPublicPortfolio(userId)
         setData(result)
 
-        const symbols = result.holdings.map((h: PublicHolding) => h.symbol)
+        const symbols: string[] = result.holdings.map((h: PublicHolding) => h.symbol)
         symbolsRef.current = symbols
-        await refreshPrices(symbols)
 
-        interval = setInterval(() => refreshPrices(symbolsRef.current), PRICE_REFRESH_MS)
+        const cryptoSymbols = symbols.filter(s => isCryptoSymbol(s))
+        const stockSymbols = symbols.filter(s => !isCryptoSymbol(s))
+
+        if (cryptoSymbols.length > 0) {
+          const streams = cryptoSymbols.map(s => `${s.toLowerCase()}@ticker`).join('/')
+          const ws = new WebSocket(`wss://stream.binance.com:9443/stream?streams=${streams}`)
+          wsRefs.push(ws)
+          ws.onmessage = (e) => {
+            try {
+              const msg = JSON.parse(e.data)
+              const d = msg.data
+              if (d && d.s && d.c) {
+                setLivePrices(prev => ({ ...prev, [d.s]: parseFloat(d.c) }))
+              }
+            } catch {}
+          }
+        }
+
+        if (stockSymbols.length > 0) {
+          await refreshPrices(symbols)
+          interval = setInterval(() => refreshPrices(symbolsRef.current), PRICE_REFRESH_MS)
+        }
       } catch {
         setError('Trader not found')
       } finally {
@@ -91,7 +109,10 @@ export default function PublicProfile() {
       }
     }
     load()
-    return () => { if (interval) clearInterval(interval) }
+    return () => {
+      if (interval) clearInterval(interval)
+      wsRefs.forEach(ws => ws.close())
+    }
   }, [userId, refreshPrices])
 
   if (loading) {
@@ -151,7 +172,13 @@ export default function PublicProfile() {
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
         <div className="card-glow p-4 animate-pulse-glow">
-          <div className="stat-label">Portfolio Value</div>
+          <div className="stat-label flex items-center gap-2">
+            Portfolio Value
+            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-profit/10 text-profit text-[10px] font-bold uppercase tracking-wider">
+              <span className="w-1.5 h-1.5 rounded-full bg-profit animate-pulse" />
+              Live
+            </span>
+          </div>
           <div className="stat-value mt-1">{formatUSD(portfolioValue)}</div>
         </div>
         <div className="card p-4">

@@ -7,11 +7,19 @@ export default function TradingPanel() {
   const {
     currentSymbol, currentBase, currentPrice, isReady, usdBalance, marketType,
     holdings, setUsdBalance, setHoldings, addToast, requireAuth,
+    pendingTradeSide, setPendingTradeSide,
   } = useStore()
 
   const [side, setSide] = useState<'buy' | 'sell'>('buy')
   const [usdAmount, setUsdAmount] = useState('')
   const [loading, setLoading] = useState(false)
+
+  useEffect(() => {
+    if (pendingTradeSide) {
+      setSide(pendingTradeSide)
+      setPendingTradeSide(null)
+    }
+  }, [pendingTradeSide, setPendingTradeSide])
 
   const base = currentBase
   const holding = holdings.find(h => h.symbol === currentSymbol)

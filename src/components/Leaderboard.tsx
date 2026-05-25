@@ -1,8 +1,9 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { Link } from 'react-router-dom'
-import { getLeaderboard } from '../lib/api'
+import { getLeaderboard, fetchStockQuote } from '../lib/api'
 import { formatUSD, formatPercent } from '../lib/format'
 import { useStore, LeaderboardEntry } from '../store/useStore'
+import { isCryptoSymbol } from '../lib/format'
 
 const PRICE_REFRESH_MS = 15_000
 
@@ -10,29 +11,103 @@ export default function Leaderboard() {
   const { leaderboard, setLeaderboard } = useStore()
   const [loading, setLoading] = useState(true)
   const [sortBy, setSortBy] = useState<'value' | 'pnl' | 'trades'>('value')
+  const [livePrices, setLivePrices] = useState<Record<string, number>>({})
+  const symbolsRef = useRef<string[]>([])
 
   const refreshLeaderboard = useCallback(async () => {
     try {
       const data = await getLeaderboard()
       setLeaderboard(data.leaderboard)
+      return data.leaderboard as LeaderboardEntry[]
     } catch {}
+    return null
   }, [setLeaderboard])
+
+  const refreshStockPrices = useCallback(async (symbols: string[]) => {
+    if (symbols.length === 0) return
+    const priceMap: Record<string, number> = {}
+    await Promise.all(symbols.map(async (s) => {
+      try {
+        const d = await fetchStockQuote(s)
+        priceMap[s] = parseFloat(d.price)
+      } catch {}
+    }))
+    if (Object.keys(priceMap).length > 0) {
+      setLivePrices(prev => ({ ...prev, ...priceMap }))
+    }
+  }, [])
 
   useEffect(() => {
     let interval: ReturnType<typeof setInterval>
+    const wsRefs: WebSocket[] = []
     const load = async () => {
       try {
-        await refreshLeaderboard()
+        const entries = await refreshLeaderboard()
+        if (!entries) return
+
+        const allSymbols = new Set<string>()
+        entries.forEach((entry: LeaderboardEntry) => {
+          entry.holdings.forEach(h => allSymbols.add(h.symbol))
+        })
+
+        const symbols = [...allSymbols]
+        symbolsRef.current = symbols
+
+        const cryptoSymbols = symbols.filter(s => isCryptoSymbol(s))
+        const stockSymbols = symbols.filter(s => !isCryptoSymbol(s))
+
+        if (cryptoSymbols.length > 0) {
+          const streams = cryptoSymbols.map(s => `${s.toLowerCase()}@ticker`).join('/')
+          const ws = new WebSocket(`wss://stream.binance.com:9443/stream?streams=${streams}`)
+          wsRefs.push(ws)
+          ws.onmessage = (e) => {
+            try {
+              const msg = JSON.parse(e.data)
+              const d = msg.data
+              if (d && d.s && d.c) {
+                setLivePrices(prev => ({ ...prev, [d.s]: parseFloat(d.c) }))
+              }
+            } catch {}
+          }
+        }
+
+        if (stockSymbols.length > 0) {
+          await refreshStockPrices(stockSymbols)
+          interval = setInterval(() => {
+            const stocks = symbolsRef.current.filter(s => !isCryptoSymbol(s))
+            if (stocks.length > 0) refreshStockPrices(stocks)
+          }, PRICE_REFRESH_MS)
+        }
       } finally { setLoading(false) }
     }
     load()
-    interval = setInterval(refreshLeaderboard, PRICE_REFRESH_MS)
-    return () => clearInterval(interval)
-  }, [refreshLeaderboard])
+    return () => {
+      if (interval) clearInterval(interval)
+      wsRefs.forEach(ws => ws.close())
+    }
+  }, [refreshLeaderboard, refreshStockPrices])
 
-  const sorted = [...leaderboard].sort((a, b) => {
-    if (sortBy === 'value') return b.portfolioValue - a.portfolioValue
-    if (sortBy === 'pnl') return b.pnlPercent - a.pnlPercent
+  const computeValue = (entry: LeaderboardEntry) => {
+    if (!entry.holdings || entry.holdings.length === 0) return entry.portfolioValue
+    const holdingsValue = entry.holdings.reduce((sum, h) => {
+      const qty = parseFloat(h.quantity)
+      const price = livePrices[h.symbol] ?? parseFloat(h.avgEntryPrice)
+      return sum + qty * price
+    }, 0)
+    return entry.usdBalance + holdingsValue
+  }
+
+  const enriched = leaderboard.map(entry => {
+    const hasLiveData = entry.holdings?.some(h => livePrices[h.symbol] !== undefined)
+    const value = hasLiveData ? computeValue(entry) : entry.portfolioValue
+    const pnl = value - 100000
+    const pnlPercent = (pnl / 100000) * 100
+    return { ...entry, liveValue: value, livePnl: pnl, livePnlPercent: pnlPercent }
+  })
+
+  const sorted = [...enriched].sort((a, b) => {
+    if (sortBy === 'value') return b.liveValue - a.liveValue
+    if (sortBy === 'pnl') return b.livePnlPercent - a.livePnlPercent
     return b.totalTrades - a.totalTrades
   })
 
@@ -88,7 +163,15 @@ export default function Leaderboard() {
                 <tr className="border-b border-dark-600/30">
                   <th className="text-left px-4 py-3 text-xs text-slate-500 font-medium">Rank</th>
                   <th className="text-left px-4 py-3 text-xs text-slate-500 font-medium">Trader</th>
-                  <th className="text-right px-4 py-3 text-xs text-slate-500 font-medium">Portfolio Value</th>
+                  <th className="text-right px-4 py-3 text-xs text-slate-500 font-medium">
+                    <span className="flex items-center justify-end gap-1.5">
+                      Portfolio Value
+                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-profit/10 text-profit text-[9px] font-bold uppercase tracking-wider">
+                        <span className="w-1 h-1 rounded-full bg-profit animate-pulse" />
+                        Live
+                      </span>
+                    </span>
+                  </th>
                   <th className="text-right px-4 py-3 text-xs text-slate-500 font-medium">P&L</th>
                   <th className="text-right px-4 py-3 text-xs text-slate-500 font-medium hidden sm:table-cell">Trades</th>
                   <th className="text-right px-4 py-3 text-xs text-slate-500 font-medium hidden md:table-cell">Assets</th>
@@ -106,10 +189,10 @@ export default function Leaderboard() {
                         <div className="text-sm font-medium group-hover:text-brand transition-colors">{entry.traderName}</div>
                       </Link>
                     </td>
-                    <td className="px-4 py-3 text-right font-mono text-sm">{formatUSD(entry.portfolioValue)}</td>
+                    <td className="px-4 py-3 text-right font-mono text-sm">{formatUSD(entry.liveValue)}</td>
                     <td className="px-4 py-3 text-right">
-                      <span className={`font-mono text-sm ${entry.pnl >= 0 ? 'text-profit' : 'text-loss'}`}>
-                        {formatPercent(entry.pnlPercent)}
+                      <span className={`font-mono text-sm ${entry.livePnl >= 0 ? 'text-profit' : 'text-loss'}`}>
+                        {formatPercent(entry.livePnlPercent)}
                       </span>
                     </td>
                     <td className="px-4 py-3 text-right font-mono text-sm text-slate-400 hidden sm:table-cell">

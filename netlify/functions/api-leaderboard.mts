@@ -59,10 +59,16 @@ export default async (req: Request) => {
       userId: u.id,
       traderName: u.fullName || u.username,
       portfolioValue,
+      usdBalance,
       pnl,
       pnlPercent,
       totalTrades: tradeCount ? Number(tradeCount.total) : 0,
       holdingsCount: uHoldings.length,
+      holdings: uHoldings.map(h => ({
+        symbol: h.symbol,
+        quantity: h.quantity,
+        avgEntryPrice: h.avgEntryPrice,
+      })),
       joinedAt: u.createdAt,
     }
   })
