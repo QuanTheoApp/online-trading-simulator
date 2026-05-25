@@ -1,18 +1,39 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { useStore } from '../store/useStore'
 import { getPortfolio, fetchStockQuote } from '../lib/api'
 import { formatUSD, formatPercent, formatCrypto, formatPrice, symbolToName, getBaseFromSymbol, isCryptoSymbol } from '../lib/format'
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts'
 
 const COLORS = ['#f0b429', '#10b981', '#3b82f6', '#8b5cf6', '#ef4444', '#f97316', '#06b6d4', '#ec4899', '#84cc16', '#6366f1']
+const PRICE_REFRESH_MS = 15_000
 
 export default function Portfolio() {
   const { isReady, holdings, usdBalance, portfolioStats, setUsdBalance, setHoldings, setPortfolioStats } = useStore()
   const [prices, setPrices] = useState<Record<string, number>>({})
   const [loading, setLoading] = useState(true)
+  const symbolsRef = useRef<string[]>([])
+
+  const refreshPrices = useCallback(async (symbols: string[]) => {
+    if (symbols.length === 0) return
+    const priceMap: Record<string, number> = {}
+    await Promise.all(symbols.map(async (s) => {
+      try {
+        if (isCryptoSymbol(s)) {
+          const res = await fetch(`https://api.binance.com/api/v3/ticker/price?symbol=${s}`)
+          const d = await res.json()
+          priceMap[s] = parseFloat(d.price)
+        } else {
+          const d = await fetchStockQuote(s)
+          priceMap[s] = parseFloat(d.price)
+        }
+      } catch {}
+    }))
+    setPrices(priceMap)
+  }, [])
 
   useEffect(() => {
     if (!isReady) { setLoading(false); return }
+    let interval: ReturnType<typeof setInterval>
     const load = async () => {
       try {
         const data = await getPortfolio()
@@ -21,26 +42,17 @@ export default function Portfolio() {
         setPortfolioStats(data.stats)
 
         const symbols = data.holdings.map((h: any) => h.symbol)
-        const priceMap: Record<string, number> = {}
-        await Promise.all(symbols.map(async (s: string) => {
-          try {
-            if (isCryptoSymbol(s)) {
-              const res = await fetch(`https://api.binance.com/api/v3/ticker/price?symbol=${s}`)
-              const d = await res.json()
-              priceMap[s] = parseFloat(d.price)
-            } else {
-              const d = await fetchStockQuote(s)
-              priceMap[s] = parseFloat(d.price)
-            }
-          } catch {}
-        }))
-        setPrices(priceMap)
+        symbolsRef.current = symbols
+        await refreshPrices(symbols)
+
+        interval = setInterval(() => refreshPrices(symbolsRef.current), PRICE_REFRESH_MS)
       } catch (err) {
         console.error(err)
       } finally { setLoading(false) }
     }
     load()
-  }, [isReady])
+    return () => { if (interval) clearInterval(interval) }
+  }, [isReady, refreshPrices])
 
   if (loading) {
     return (
